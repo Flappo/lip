@@ -4,10 +4,13 @@ open Ast
 
 %token <string> CONST
 %token PLUS
+%token SUB (* sottrazione *)
 %token LPAREN
 %token RPAREN
 %token EOF
 
+(* le operazioni più in basso hanno una maggiore priorità *)
+%left SUB (* sottrazione *)
 %left PLUS
 
 %start <ast> prog
