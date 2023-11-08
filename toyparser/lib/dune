@@ -2,3 +2,5 @@
  (name toyparser))
 (menhir (modules parser))
 (ocamllex lexer)
+(menhir (modules parser))
+(ocamllex lexer)

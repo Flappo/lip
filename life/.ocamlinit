@@ -1,0 +1,2 @@
+open Life.Main;;
+open Life.Rule;;
