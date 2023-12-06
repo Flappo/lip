@@ -1,4 +1,5 @@
 open SarithexprLib.Main
+open SarithexprLib.Types
   
 (* read file, and output it to a string *)
 
