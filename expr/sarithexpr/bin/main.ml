@@ -1,62 +1,130 @@
-open SarithexprLib.Main
-open SarithexprLib.Types
-  
-(* read file, and output it to a string *)
+open Ast
 
-let read_file filename =
-  let ch = open_in filename in
-  let s = really_input_string ch (in_channel_length ch) in
-  close_in ch; s
-;;
+let rec string_of_expr = function
+  | True -> "True"
+  | False -> "False"
+  | Zero -> "0"
+  | If (e0, e1, e2) ->
+      "If(" ^ string_of_expr e0 ^ "," ^ string_of_expr e1 ^ ","
+      ^ string_of_expr e2 ^ ")"
+  | Not e -> "Not(" ^ string_of_expr e ^ ")"
+  | And (e1, e2) -> "And(" ^ string_of_expr e1 ^ "," ^ string_of_expr e2 ^ ")"
+  | Or (e1, e2) -> "Or(" ^ string_of_expr e1 ^ "," ^ string_of_expr e2 ^ ")"
+  | Succ e -> "Succ(" ^ string_of_expr e ^ ")"
+  | Pred e -> "Pred(" ^ string_of_expr e ^ ")"
+  | IsZero e -> "IsZero(" ^ string_of_expr e ^ ")"
 
-(* read line from standard input, and output it to a string *)
+let parse (s : string) : expr =
+  let lexbuf = Lexing.from_string s in
+  let ast = Parser.prog Lexer.read lexbuf in
+  ast
 
-let read_line () =
-  try Some(read_line())
-  with End_of_file -> None
-;;
+exception NoRuleApplies
 
-(* print a result *)
+let rec is_nv = function Zero -> true | Succ e -> is_nv e | _ -> false
 
-let print_val e = print_string (string_of_val e); print_newline();;
+let rec trace1 = function
+  | If (True, e1, _) -> e1
+  | If (False, _, e2) -> e2
+  | If (e0, e1, e2) ->
+      let e0' = trace1 e0 in
+      If (e0', e1, e2)
+  | Not True -> False
+  | Not False -> True
+  | Not e -> Not (trace1 e)
+  | And (True, e2) -> e2
+  | And (False, _) -> False
+  | And (e1, e2) -> And (trace1 e1, e2)
+  | Or (False, e2) -> e2
+  | Or (True, _) -> True
+  | Or (e1, e2) -> Or (trace1 e1, e2)
+  | Succ e -> Succ (trace1 e)
+  | Pred Zero -> raise NoRuleApplies
+  | Pred (Succ nv) when is_nv nv -> nv
+  | Pred e -> Pred (trace1 e)
+  | IsZero Zero -> True
+  | IsZero (Succ nv) when is_nv nv -> False
+  | IsZero e -> IsZero (trace1 e)
+  | _ -> raise NoRuleApplies
 
-(* print a trace *)
+let rec trace e =
+  try
+    let e' = trace1 e in
+    e :: trace e'
+  with NoRuleApplies -> [ e ]
 
-let rec print_trace = function
-    [] -> print_newline()
-  | [x] -> print_endline (string_of_expr x)
-  | x::l -> print_endline (string_of_expr x); print_string " -> " ; print_trace l
-;;
+type exprval = Bool of bool | Nat of int
 
-let print_type e = try 
-    print_endline (string_of_type (typecheck e))
-  with TypeError s -> print_endline s
-;;
+let string_of_val = function
+  | Bool b -> string_of_bool b
+  | Nat n -> string_of_int n
 
-match Array.length(Sys.argv) with
-(* eval / read input from stdin *) 
-  1 -> (match read_line() with
-    Some s when s<>"" -> s |> parse |> eval |> print_val
-  | _ -> print_newline())
-(* trace / read input from stdin *)      
-| 2 when Sys.argv.(1) = "trace" -> (match read_line() with
-    Some s when s<>"" -> s |> parse |> trace |> print_trace
-  | _ -> print_newline())
-(* typecheck / read input from stdin *)      
-| 2 when Sys.argv.(1) = "typecheck" -> (match read_line() with
-    Some s when s<>"" -> s |> parse |> print_type
-  | _ -> print_newline())
-(* eval / read input from file *) 
-| 2 -> (match read_file Sys.argv.(1) with
-      "" -> print_newline()
-    | s -> s |> parse |> eval |> print_val)
-(* trace / read input from file *)      
-| 3 when Sys.argv.(1) = "trace" -> (match read_file Sys.argv.(2) with
-      "" -> print_newline()
-    | s -> s |> parse |> trace |> print_trace)
-(* typecheck / read input from file *)      
-| 3 when Sys.argv.(1) = "typecheck" -> (match read_file Sys.argv.(2) with
-      "" -> print_newline()
-    | s -> s |> parse |> print_type)
-(* wrong usage *)      
-| _ -> failwith "Usage: dune exec arithexpr [trace|typecheck] [file]"
+exception InvalidArg of string
+
+let rec eval e =
+  match e with
+  | True -> Bool true
+  | False -> Bool false
+  | Zero -> Nat 0
+  | If (e0, e1, e2) -> if evalbool e e0 then eval e1 else eval e2
+  | Not e' -> Bool (not (evalbool e e'))
+  | And (e1, e2) -> Bool (evalbool e e1 && evalbool e e2)
+  | Or (e1, e2) -> Bool (evalbool e e1 || evalbool e e2)
+  | Succ e' -> Nat (evalnat e e' + 1)
+  | Pred e' ->
+      let n = evalnat e e' in
+      if n > 0 then Nat (n - 1) else raise (InvalidArg "Negative nat")
+  | IsZero e' -> Bool (evalnat e e' = 0)
+
+and evalbool e arg =
+  match eval arg with
+  | Bool b -> b
+  | _ ->
+      raise
+        (InvalidArg
+           ("In " ^ string_of_expr e ^ ", " ^ string_of_expr arg
+          ^ " has type nat but a value was expected of type bool."))
+
+and evalnat e arg =
+  match eval arg with
+  | Nat n -> n
+  | _ ->
+      raise
+        (InvalidArg
+           ("In " ^ string_of_expr e ^ ", " ^ string_of_expr arg
+          ^ " has type bool but a value was expected of type nat."))
+
+type exprtype = BoolT | NatT
+
+exception TypeError of string
+
+let string_of_type = function BoolT -> "Bool" | NatT -> "Nat"
+
+let typerror e actualt expectedt =
+  TypeError
+    (string_of_expr e ^ " has type " ^ string_of_type actualt ^ ", but type "
+   ^ string_of_type expectedt ^ " was expected")
+  |> raise
+
+let rec typecheck = function
+  | True | False -> BoolT
+  | Zero -> NatT
+  | Not e -> if typecheck e = BoolT then BoolT else typerror e NatT BoolT
+  | If (e0, _, _) when typecheck e0 <> BoolT -> typerror e0 NatT BoolT
+  | If (_, e1, e2) ->
+      let t1, t2 = (typecheck e1, typecheck e2) in
+      if t1 = t2 then t1
+      else
+        TypeError
+          ("Type mismatch in if branches: " ^ string_of_type t1 ^ " (then) vs "
+         ^ string_of_type t2 ^ " (else)")
+        |> raise
+  | And (e1, e2) | Or (e1, e2) -> (
+      match (typecheck e1, typecheck e2) with
+      | BoolT, BoolT -> BoolT
+      | BoolT, _ -> typerror e2 NatT BoolT
+      | _ -> typerror e1 NatT BoolT)
+  | IsZero e -> if typecheck e = NatT then BoolT else typerror e BoolT NatT
+  | Succ e | Pred e ->
+      if typecheck e = NatT then NatT else typerror e BoolT NatT
+    

@@ -1,37 +1,33 @@
 {
   open Parser
+
+  exception Error
 }
 
-let white = [' ' '\t']+
-let num = ['0'-'9']|['1'-'9']['0'-'9']*
-
-let chars = ['a'-'z''A'-'Z']+
-
-rule read_token =
-  parse
-  | white { read_token lexbuf }  
-  | "(" { LPAREN }
-  | ")" { RPAREN }
-  | "+" { PLUS }
-  | "-" { SUB } (* sottrazione *)
-  | "*" { MUL } (* moltiplicazione *)
-  | "/" { DIV } (* divisione *)
-  | num { CONST (Lexing.lexeme lexbuf) }
-  | eof { EOF }
-(*while exercise*)
-  | "skip" { SKIP }
-  | "true" { TRUE }
-  | "false" { FALSE }
-  | chars { VAR (Lexing.lexeme lexbuf) }
-  | "and" { AND }
-  | "not" { NOT }
-  | "=" { EQ }
-  | "<=" { LEQ }
-  | ":=" { ASSIGN }
-  | "if" { IF } (*if then else*)
-  | "then" { THEN }
-  | "else" { ELSE }
-  | "while" { WHILE }
-  | "do" { DO }
-  | ";" { SEQ }
- 
+rule token = parse
+| [' ' '\t'] { token lexbuf }
+| '\n' { Lexing.new_line lexbuf; token lexbuf }
+| ":=" { ASSIGN }
+| "=" { EQ }
+| "<=" { LEQ }
+| "if" { IF }
+| "then" { THEN }
+| "else" { ELSE }
+| "while" { WHILE }
+| "do" { DO }
+| "skip" { SKIP }
+| ";" { SEMICOLON }
+| "+" { PLUS }
+| "-" { MINUS }
+| "*" { TIMES }
+| "(" { LPAREN }
+| ")" { RPAREN }
+| "true" { TRUE }
+| "false" { FALSE }
+| "not" { NOT }
+| "and" { AND }
+| "or" { OR }
+| ['a'-'z']['a'-'z''A'-'Z''0'-'9''_']* { ID (Lexing.lexeme lexbuf) }
+| ['0'-'9']+ { INT (Lexing.lexeme lexbuf |> int_of_string) }
+| _ { raise Error }
+| eof { EOF }
