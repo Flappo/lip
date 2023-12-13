@@ -25,9 +25,7 @@ open Ast
 %token LEQ
 %token ASSIGN
 
-%token IF (*if then else*)
-%token THEN
-%token ELSE
+%token IF THEN ELSE(*if then else*)
 %token WHILE (*while do*)
 %token DO 
 
@@ -36,10 +34,13 @@ open Ast
 
 
 (* le operazioni più in basso hanno una maggiore priorità *)
-%left SUB (* sottrazione *)
-%left PLUS
-%left DIV (* divisione *)
-%left MUL (* moltiplicazione *)
+%left AND OR
+%nonassoc NOT 
+%left EQ LEQ
+%left ASSIGN
+
+%left SUB PLUS (* sottrazione  e addizione *)
+%left DIV MUL (* divisione e moltiplicazione *)
 
 (*while exercise*)
 %nonassoc IF
@@ -48,13 +49,8 @@ open Ast
 %nonassoc WHILE
 %nonassoc DO
 
-%left LEQ
-%left EQ
-%left OR
-%left AND
-%left NOT
-%left ASSIGN
-%left SEQ (**)
+
+%right SEQ 
 
 
 
@@ -62,6 +58,7 @@ open Ast
 
 %%
 
+(* Simbolo iniziale della grammatica, inizia con un comando e finisce con un End Of File *)
 prog:
   | c = cmd; EOF { c }
 ;
@@ -86,8 +83,8 @@ expr:
 
 cmd:
   | SKIP { Skip }
-  | IF; e = expr; THEN; c1 = cmd; ELSE; c2 = cmd { If(e,c1,c2) }
-  | WHILE; e = expr; DO; c = cmd { While(e,c) } 
+  | IF; e = expr; THEN; c1 = cmd; ELSE; c2 = cmd { If(e,c1,c2) } 
+  | WHILE; e = expr; DO; LPAREN; c = cmd; RPAREN; { While(e,c) } 
   | v = VAR; ASSIGN; e = expr { Assign(v,e) }
-  | c1 = cmd; SEQ; c2 = cmd { Seq(c1,c2) }
+  | c1 = cmd; SEQ; c2 = cmd { Seq(c1,c2) } 
 ;

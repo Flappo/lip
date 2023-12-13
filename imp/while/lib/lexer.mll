@@ -31,5 +31,7 @@ rule read_token =
   | "if" { IF } (*if then else*)
   | "then" { THEN }
   | "else" { ELSE }
+  | "while" { WHILE }
+  | "do" { DO }
   | ";" { SEQ }
  
